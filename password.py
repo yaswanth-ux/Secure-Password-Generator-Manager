@@ -16,6 +16,7 @@
 # ✅ Interactive UI: Developed with Streamlit for a user-friendly experience.
 
 
+
 import streamlit as st
 import random
 import string
@@ -40,7 +41,7 @@ st.markdown("""
 - No confusing characters (e.g., `O` vs `0`, `l` vs `1`)  
 """)
 
-# Function to validate custom password based on selected rules
+# Function to validate custom password
 def validate_password(password, rules):
     if len(password) < 10:
         return "❌ Password must be at least 10 characters long!"
@@ -54,90 +55,84 @@ def validate_password(password, rules):
         return "❌ Password must contain at least one special character (!@#$%^&*)!"
     return None
 
-# Function to generate an easy-to-read password
-def generate_easy_password(length=12):
-    letters = string.ascii_letters.replace('l', '').replace('O', '').replace('I', '')
-    numbers = "23456789"
-    symbols = "!@#$%^&*"
-    
-    part1 = ''.join(random.choices(letters, k=4))
-    part2 = ''.join(random.choices(symbols, k=2))
-    part3 = ''.join(random.choices(numbers, k=4))
-    part4 = ''.join(random.choices(letters, k=2))
-    
-    return f"{part1}{part2}{part3}{part4}"
+# Function to generate an easy-to-read and remember password
+def generate_easy_password():
+    # Ensure a pattern like: Xx@12345 (Easy to Read & Remember)
+    uppercase = random.choice(string.ascii_uppercase)  # 1 Uppercase
+    lowercase1 = random.choice(string.ascii_lowercase)  # 1 Lowercase
+    lowercase2 = random.choice(string.ascii_lowercase)  # 1 Lowercase
+    symbol = random.choice("!@#$%^&*")  # 1 Symbol
+    numbers = "".join(random.choices(string.digits, k=5))  # 5 Digits
 
-# Initialize password variable
-password = ""
+    password = uppercase + lowercase1 + symbol + lowercase2 + numbers
+    return password
 
-# Get user input
+# Function to check if category already exists
+def check_existing_category(category):
+    records = sheet.get_all_records()
+    for i, row in enumerate(records, start=2):  # Start from row 2 (row 1 has headers)
+        if row['category'].lower() == category.lower():
+            return i, row['password generated']  # Return row index and existing password
+    return None, None
+
+# User Input
 password_type = st.radio("Choose Password Type:", ["Auto-Generated", "Custom Password"])
 category = st.text_input("Enter the category (e.g., Instagram, Facebook, LinkedIn):")
 
-if password_type == "Auto-Generated":
-    password_length = st.slider("Select Password Length:", 10, 16, 12)
-    if category:
+if category:
+    row_index, existing_password = check_existing_category(category)
+    if existing_password:
+        st.warning(f"⚠️ A password for '{category}' already exists! You can update it.")
+        st.text_input("Existing Password:", value=existing_password, key="existing_password", disabled=True)
+    
+    if password_type == "Auto-Generated":
         if st.button("🔄 Generate Password"):
-            password = generate_easy_password(password_length)
-            st.text_input("Generated Password:", value=password, key="password", disabled=True)
+            password = generate_easy_password()
+            st.text_input("Generated Password:", value=password, key="generated_password", disabled=True)
             pyperclip.copy(password)
-            sheet.append_row([category, password])
-            st.success(f"✅ Password for '{category}' saved & copied to clipboard!")
-    else:
-        st.warning("⚠️ Please enter a category before generating a password.")
-
-elif password_type == "Custom Password":
-    st.markdown("### Select Rules for Your Custom Password:")
-    uppercase = st.checkbox("Must contain Uppercase Letters")
-    lowercase = st.checkbox("Must contain Lowercase Letters")
-    numbers = st.checkbox("Must contain Numbers")
-    symbols = st.checkbox("Must contain Symbols")
-    
-    # Apply default rule (all rules enabled) if no checkboxes are selected
-    if not any([uppercase, lowercase, numbers, symbols]):
-        uppercase, lowercase, numbers, symbols = True, True, True, True
-    
-    selected_rules = {"Uppercase": uppercase, "Lowercase": lowercase, "Numbers": numbers, "Symbols": symbols}
-    
-    password = st.text_input("Enter Your Custom Password:", type="password")
-    confirm_password = st.text_input("Confirm Your Password:", type="password")
-    
-    if password and confirm_password:
-        if password != confirm_password:
-            st.error("❌ Passwords do not match!")
-        else:
-            validation_error = validate_password(password, selected_rules)
-            
-            # ✅ Enforce user-selected rules strictly
-            if validation_error:
-                st.error(validation_error)
+            if row_index:
+                sheet.update_cell(row_index, 2, password)
             else:
-                # Enforce only allowed characters based on user selection
-                if uppercase and not lowercase and not numbers and not symbols:
-                    if not all(c.isupper() for c in password):
-                        st.error("❌ Password must contain only uppercase letters!")
-                        st.stop()
-                if lowercase and not uppercase and not numbers and not symbols:
-                    if not all(c.islower() for c in password):
-                        st.error("❌ Password must contain only lowercase letters!")
-                        st.stop()
-                if numbers and not uppercase and not lowercase and not symbols:
-                    if not all(c.isdigit() for c in password):
-                        st.error("❌ Password must contain only numbers!")
-                        st.stop()
-                if symbols and not uppercase and not lowercase and not numbers:
-                    if not all(c in "!@#$%^&*" for c in password):
-                        st.error("❌ Password must contain only symbols!")
-                        st.stop()
+                sheet.append_row([category, password])
+            st.success(f"✅ Password for '{category}' saved & copied to clipboard!")
 
-                if category and st.button("💾 Save Password"):
-                    sheet.append_row([category, password])
-                    st.success(f"✅ Custom Password for '{category}' saved!")
+    elif password_type == "Custom Password":
+        st.markdown("### Select Rules for Your Custom Password:")
+        uppercase = st.checkbox("Must contain Uppercase Letters")
+        lowercase = st.checkbox("Must contain Lowercase Letters")
+        numbers = st.checkbox("Must contain Numbers")
+        symbols = st.checkbox("Must contain Symbols")
+        
+        if not any([uppercase, lowercase, numbers, symbols]):
+            uppercase, lowercase, numbers, symbols = True, True, True, True
+        
+        selected_rules = {"Uppercase": uppercase, "Lowercase": lowercase, "Numbers": numbers, "Symbols": symbols}
+        
+        password = st.text_input("Enter Your Custom Password:", type="password")
+        confirm_password = st.text_input("Confirm Your Password:", type="password")
+        
+        if password and confirm_password:
+            if password != confirm_password:
+                st.error("❌ Passwords do not match!")
+            else:
+                validation_error = validate_password(password, selected_rules)
+                if validation_error:
+                    st.error(validation_error)
+                else:
+                    if st.button("💾 Save or Update Password"):
+                        if row_index:
+                            sheet.update_cell(row_index, 2, password)
+                        else:
+                            sheet.append_row([category, password])
+                        st.success(f"✅ Password for '{category}' updated & saved!")
+                        pyperclip.copy(password)
 
-if password:
-    if st.button("📋 Copy to Clipboard"):
+# Copy Button
+if 'password' in locals() and password:
+    if st.button("📋 Copy Password"):
         pyperclip.copy(password)
-        st.success("📋 Password copied to clipboard!")
+        st.success("✅ Password copied to clipboard!")
 
+# Footer
 st.markdown("---")
-st.text("Developed by Sai 🚀")
+st.text("Developed by Yaswanth 🚀")
